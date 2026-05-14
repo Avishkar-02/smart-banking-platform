@@ -23,36 +23,24 @@
 	</properties>
 
 	<dependencies>
-		<!--
-            Spring Cloud Gateway — reactive API gateway built on WebFlux.
-            Routes incoming HTTP requests to downstream services.
-            We will add JWT validation and rate limiting as filters here.
-        -->
+
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-starter-gateway</artifactId>
 		</dependency>
 
-		<!--
-            Eureka Client — registers this gateway with the service registry
-            AND allows it to resolve service names to actual IPs when routing.
-            e.g. lb://user-service becomes the actual host:port of user-service.
-        -->
+
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
 		</dependency>
 
-		<!--
-            Redis Reactive — for rate limiting. Spring Cloud Gateway's
-            built-in rate limiter uses Redis to track request counts per user.
-        -->
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-redis-reactive</artifactId>
 		</dependency>
 
-		<!-- JWT library for validating tokens at the gateway level -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
 			<artifactId>jjwt-api</artifactId>
@@ -71,7 +59,6 @@
 			<scope>runtime</scope>
 		</dependency>
 
-		<!-- Actuator — exposes /actuator/health endpoint, useful for monitoring -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
@@ -82,6 +69,7 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
 	</dependencies>
 
 	<dependencyManagement>

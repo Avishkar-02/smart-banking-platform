@@ -5,11 +5,7 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!--
-        This module has no Spring Boot parent.
-        It is a plain Java library — no main class, no embedded server.
-        Other services will declare this as a <dependency>.
-    -->
+
     <parent>
         <groupId>com.smartbanking</groupId>
         <artifactId>smart-banking-platform</artifactId>
@@ -21,14 +17,13 @@
     <name>common-lib</name>
 
     <dependencies>
-        <!-- Jackson for JSON serialization of our shared DTOs -->
+
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>2.16.1</version>
         </dependency>
 
-        <!-- Lombok — eliminates boilerplate getters/setters/constructors -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

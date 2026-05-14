@@ -23,12 +23,7 @@
 	</properties>
 
 	<dependencies>
-		<!--
-            Config Server — serves configuration files to all other services.
-            When user-service starts, it calls this service first and gets
-            its database URL, Kafka address, JWT secret etc. from here.
-            This means you change config in one place, not in 8 services.
-        -->
+
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-config-server</artifactId>
