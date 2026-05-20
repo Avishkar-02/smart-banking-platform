@@ -4,7 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -18,7 +17,6 @@ public class AccountCreditedEvent {
     private String accountNumber;
     private BigDecimal amountCredited;
     private BigDecimal balanceAfterCredit;
-    private String correlationId;
 
     @Builder.Default
     private LocalDateTime occurredAt = LocalDateTime.now();

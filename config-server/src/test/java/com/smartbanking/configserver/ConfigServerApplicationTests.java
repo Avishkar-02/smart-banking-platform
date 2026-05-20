@@ -1,4 +1,4 @@
-package com.smartbanking.config_server;
+package com.smartbanking.configserver;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

@@ -4,7 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -19,15 +18,14 @@ public class TransactionCompletedEvent {
     private String destinationAccountNumber;
     private BigDecimal amount;
     private String currency;
-
     private String senderEmail;
     private String receiverEmail;
 
+    // "COMPLETED" or "FAILED" — notification-service sends different messages
     private String finalStatus;
 
+    // Only populated when finalStatus = "FAILED"
     private String failureReason;
-
-    private String correlationId;
 
     @Builder.Default
     private LocalDateTime occurredAt = LocalDateTime.now();

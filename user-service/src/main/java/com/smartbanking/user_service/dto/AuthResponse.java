@@ -1,23 +1,30 @@
-package com.smartbanking.common.event;
+package com.smartbanking.user_service.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.time.LocalDateTime;
+
 
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserRegisteredEvent {
+public class AuthResponse {
+
+    private String accessToken;
+    private String refreshToken;
+
+    @Builder.Default
+    private String tokenType = "Bearer";
+
+
+    private Long expiresIn;
 
     private String userUuid;
     private String email;
     private String firstName;
     private String lastName;
-
-    @Builder.Default
-    private LocalDateTime occurredAt = LocalDateTime.now();
+    private String role;
 }
