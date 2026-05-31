@@ -1,4 +1,4 @@
-package com.smartbanking.account_service;
+package com.smartbanking.accountservice;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
