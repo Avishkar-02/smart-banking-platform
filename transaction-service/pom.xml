@@ -23,32 +23,36 @@
 	</properties>
 
 	<dependencies>
+
+		<!-- Web layer — REST controllers, embedded Tomcat, Jackson JSON -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
+
+		<!-- JPA — Hibernate ORM, Spring Data repositories, @Transactional -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
 		</dependency>
+
+		<!-- MySQL JDBC driver — connects to transaction_db -->
 		<dependency>
 			<groupId>com.mysql</groupId>
 			<artifactId>mysql-connector-j</artifactId>
 			<scope>runtime</scope>
 		</dependency>
+
+		<!-- Bean Validation — @NotBlank, @DecimalMin, @NotNull on DTOs -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>org.springframework.kafka</groupId>
-			<artifactId>spring-kafka</artifactId>
-		</dependency>
 
 		<!--
-            Redis — two uses in transaction-service:
-            1. Cache idempotency keys for fast duplicate detection
-            2. Store hot transaction status (so polling doesn't hammer MySQL)
+            Redis — two purposes in this service:
+            1. Idempotency key storage with TTL
+            2. Hot transaction status cache so polling does not hammer MySQL
         -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -56,9 +60,43 @@
 		</dependency>
 
 		<!--
-            Resilience4j — circuit breaker for calls to fraud-detection-service.
-            If fraud service is down, we fail open (allow transaction, flag for review)
-            rather than blocking all transfers.
+            Kafka — this service is both producer and consumer.
+            Producer: TransactionInitiatedEvent, DebitCommand, CreditCommand, etc.
+            Consumer: AccountDebitedEvent, AccountCreditedEvent, FraudResultEvent
+        -->
+		<dependency>
+			<groupId>org.springframework.kafka</groupId>
+			<artifactId>spring-kafka</artifactId>
+		</dependency>
+
+		<!-- Eureka client — registers with service-registry on startup -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+		</dependency>
+
+		<!--
+            Config client — fetches transaction-service.properties from config-server.
+            CRITICAL: without this, bootstrap.properties import does nothing.
+        -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-config</artifactId>
+		</dependency>
+
+		<!--
+            Bootstrap — enables bootstrap.properties loading in Spring Boot 3.
+            CRITICAL: without this, bootstrap.properties is completely ignored.
+        -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-bootstrap</artifactId>
+		</dependency>
+
+		<!--
+            Resilience4j — circuit breaker for fraud-detection-service calls.
+            resilience4j-spring-boot3 is the correct artifact for Spring Boot 3.
+            Provides @CircuitBreaker annotation and auto-configuration.
         -->
 		<dependency>
 			<groupId>io.github.resilience4j</groupId>
@@ -66,40 +104,57 @@
 			<version>2.2.0</version>
 		</dependency>
 
-		<!-- OpenFeign — declarative HTTP client to call account-service -->
+		<!--
+            AOP — required by Resilience4j to intercept @CircuitBreaker annotations.
+            Resilience4j uses Spring AOP proxies to wrap annotated methods.
+            Without this, @CircuitBreaker is silently ignored at runtime.
+        -->
 		<dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-openfeign</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aop</artifactId>
 		</dependency>
 
-		<dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
-		</dependency>
+		<!-- Lombok — @Slf4j, @Builder, @Data, @RequiredArgsConstructor etc. -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
 		</dependency>
+
+		<!-- Actuator — /actuator/health endpoint -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
+
+		<!-- common-lib — shared DTOs, Kafka events, BusinessException, ErrorCode -->
 		<dependency>
 			<groupId>com.smartbanking</groupId>
 			<artifactId>common-lib</artifactId>
 			<version>1.0.0</version>
 		</dependency>
+
+		<!-- Test framework — JUnit5, Mockito, AssertJ, MockMvc -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 
+		<!-- H2 in-memory DB — replaces MySQL in tests -->
 		<dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-bootstrap</artifactId>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>test</scope>
 		</dependency>
+
+		<!-- Embedded Kafka broker for tests — no external Kafka needed -->
+		<dependency>
+			<groupId>org.springframework.kafka</groupId>
+			<artifactId>spring-kafka-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
 	</dependencies>
 
 	<dependencyManagement>
@@ -119,7 +174,16 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<excludes>
+						<exclude>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</exclude>
+					</excludes>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>
+
 </project>

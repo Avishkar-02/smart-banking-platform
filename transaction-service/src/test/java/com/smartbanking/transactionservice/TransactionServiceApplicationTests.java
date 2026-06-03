@@ -1,4 +1,4 @@
-package com.smartbanking.transaction_service;
+package com.smartbanking.transactionservice;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
