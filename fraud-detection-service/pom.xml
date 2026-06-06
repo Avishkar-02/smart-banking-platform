@@ -37,21 +37,13 @@
 			<scope>runtime</scope>
 		</dependency>
 
-		<!--
-            Kafka — this service is primarily a consumer.
-            It listens to TransactionCreatedEvent, scores the transaction,
-            then publishes FraudAlertEvent or AccountFreezeEvent.
-        -->
+
 		<dependency>
 			<groupId>org.springframework.kafka</groupId>
 			<artifactId>spring-kafka</artifactId>
 		</dependency>
 
-		<!--
-            Redis — stores velocity counters in memory.
-            "How many transactions has user X made in the last 60 seconds?"
-            Redis INCR + TTL answers this in microseconds vs a SQL COUNT query.
-        -->
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-redis</artifactId>
@@ -85,8 +77,12 @@
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-starter-bootstrap</artifactId>
 		</dependency>
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+        </dependency>
 
-	</dependencies>
+    </dependencies>
 
 	<dependencyManagement>
 		<dependencies>

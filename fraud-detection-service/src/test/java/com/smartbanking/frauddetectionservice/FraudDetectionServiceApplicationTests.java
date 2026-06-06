@@ -1,4 +1,4 @@
-package com.smartbanking.fraud_detection_service;
+package com.smartbanking.frauddetectionservice;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
