@@ -1,6 +1,52 @@
-target/
-*.class
-*.jar
+# =========================
+# Backend (Spring Boot)
+# =========================
+
+smart_banking_project/**/target/
+smart_banking_project/**/*.class
+smart_banking_project/**/*.jar
+
+# IntelliJ
 .idea/
+**/.idea/
 *.iml
+
+# Environment files
 .env
+**/.env
+
+# Logs
+*.log
+
+# =========================
+# Frontend (React)
+# =========================
+
+smart-banking-ui/node_modules/
+smart-banking-ui/build/
+smart-banking-ui/coverage/
+
+smart-banking-ui/.pnp
+smart-banking-ui/.pnp.js
+
+smart-banking-ui/.env.local
+smart-banking-ui/.env.development.local
+smart-banking-ui/.env.test.local
+smart-banking-ui/.env.production.local
+
+smart-banking-ui/npm-debug.log*
+smart-banking-ui/yarn-debug.log*
+smart-banking-ui/yarn-error.log*
+
+# =========================
+# OS Files
+# =========================
+
+.DS_Store
+Thumbs.db
+
+# =========================
+# Documentation output
+# =========================
+
+documentation/

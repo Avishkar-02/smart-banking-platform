@@ -1,0 +1,398 @@
+# ================================================================
+# docker-compose.yml — Smart Banking Platform
+# Place this file at: C:\Personal_Project\Microservice_project\docker-compose.yml
+#   (i.e. ONE LEVEL ABOVE smart_banking_project and smart-banking-ui,
+#    so it can see both folders as build contexts)
+#
+# STARTUP ORDER (enforced via depends_on + healthcheck conditions):
+#   1. Infrastructure: mysql, kafka (+zookeeper), redis   — start in parallel
+#   2. service-registry (Eureka)                          — needs nothing
+#   3. config-server                                      — waits for service-registry
+#   4. All business services                              — wait for config-server
+#      AND their required infra (mysql/kafka/redis) to be healthy
+#   5. api-gateway                                        — waits for all business
+#      services to be registered-capable (waits for service-registry healthy;
+#      it will retry registering with each service via Eureka lazily)
+#   6. frontend (nginx)                                    — waits for api-gateway
+#
+# Using "condition: service_healthy" (not just service_started) is what
+# fixes the race condition you hit with Gemini — a dependent container
+# will not even attempt to start until the dependency's HEALTHCHECK
+# reports "healthy".
+# ================================================================
+
+services:
+
+  # ------------------------------------------------------------
+  # MySQL — single instance, multiple databases.
+  # init-db.sql (mounted below) creates the 5 databases on first boot.
+  # ------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: smart-banking-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      - smart-banking-net
+
+  # ------------------------------------------------------------
+  # Zookeeper — required by Kafka (Confluent images)
+  # ------------------------------------------------------------
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: smart-banking-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD-SHELL", "zookeeper-shell localhost:2181 ls / || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - smart-banking-net
+
+  # ------------------------------------------------------------
+  # Kafka — message broker for inter-service events
+  # ------------------------------------------------------------
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: smart-banking-kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # Two listeners: internal (other containers use "kafka:9092"),
+      # external (host machine can use "localhost:9092" for debugging tools)
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - smart-banking-net
+
+  # ------------------------------------------------------------
+  # Redis — used by transaction-service, fraud-detection-service,
+  # user-service, and api-gateway (rate limiting)
+  # ------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: smart-banking-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - smart-banking-net
+
+  # ------------------------------------------------------------
+  # service-registry — Eureka Server (port 8761)
+  # No dependencies — first Spring Boot service to come up.
+  # ------------------------------------------------------------
+  service-registry:
+    build:
+      context: ./smart_banking_project
+      dockerfile: service-registry/Dockerfile
+    container_name: smart-banking-service-registry
+    restart: unless-stopped
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      - smart-banking-net
+
+  # ------------------------------------------------------------
+  # config-server — Spring Cloud Config (native, port 8888)
+  # Waits for service-registry to be healthy before starting,
+  # since config-server registers itself with Eureka.
+  # ------------------------------------------------------------
+  config-server:
+    build:
+      context: ./smart_banking_project
+      dockerfile: config-server/Dockerfile
+    container_name: smart-banking-config-server
+    restart: unless-stopped
+    depends_on:
+      service-registry:
+        condition: service_healthy
+    ports:
+      - "8888:8888"
+    environment:
+      # Combine the existing 'native' profile (search-locations config)
+      # with 'docker' (eureka URL override). Order matters: docker last
+      # so it overlays on top of native's base properties.
+      SPRING_PROFILES_ACTIVE: native,docker
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8888/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      - smart-banking-net
+
+  # ------------------------------------------------------------
+  # user-service (port 8081) — MySQL + Redis + Kafka + Eureka + Config
+  # ------------------------------------------------------------
+  user-service:
+    build:
+      context: ./smart_banking_project
+      dockerfile: user-service/Dockerfile
+    container_name: smart-banking-user-service
+    restart: unless-stopped
+    depends_on:
+      config-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8081/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - smart-banking-net
+
+  # ------------------------------------------------------------
+  # account-service (port 8082) — MySQL + Kafka + Eureka + Config
+  # ------------------------------------------------------------
+  account-service:
+    build:
+      context: ./smart_banking_project
+      dockerfile: account-service/Dockerfile
+    container_name: smart-banking-account-service
+    restart: unless-stopped
+    depends_on:
+      config-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8082/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - smart-banking-net
+
+  # ------------------------------------------------------------
+  # transaction-service (port 8083) — MySQL + Redis + Kafka + Eureka + Config
+  # Calls fraud-detection-service via Eureka (lb://), so it's fine for
+  # them to start in parallel — Eureka client retries discovery.
+  # ------------------------------------------------------------
+  transaction-service:
+    build:
+      context: ./smart_banking_project
+      dockerfile: transaction-service/Dockerfile
+    container_name: smart-banking-transaction-service
+    restart: unless-stopped
+    depends_on:
+      config-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8083/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - smart-banking-net
+
+  # ------------------------------------------------------------
+  # fraud-detection-service (port 8084) — MySQL + Redis + Kafka + Eureka + Config
+  # ------------------------------------------------------------
+  fraud-detection-service:
+    build:
+      context: ./smart_banking_project
+      dockerfile: fraud-detection-service/Dockerfile
+    container_name: smart-banking-fraud-detection-service
+    restart: unless-stopped
+    depends_on:
+      config-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8084/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - smart-banking-net
+
+  # ------------------------------------------------------------
+  # notification-service (port 8085) — MySQL + Kafka (consumer only) + Eureka + Config
+  # spring.mail.password is injected here, NOT in any properties file.
+  # Replace the placeholder with your real Gmail App Password.
+  # ------------------------------------------------------------
+  notification-service:
+    build:
+      context: ./smart_banking_project
+      dockerfile: notification-service/Dockerfile
+    container_name: smart-banking-notification-service
+    restart: unless-stopped
+    depends_on:
+      config-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      # CHANGE ME: 16-character Gmail App Password (not your normal password)
+      SPRING_MAIL_PASSWORD: "monq nndf ylne vits"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8085/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - smart-banking-net
+
+  # ------------------------------------------------------------
+  # api-gateway (port 8080) — entry point for the frontend.
+  # Routes to all *-service instances via Eureka lb://.
+  # Waits for the business services to be healthy so that by the time
+  # the gateway is ready, lb:// routes have something to resolve to.
+  # ------------------------------------------------------------
+  api-gateway:
+    build:
+      context: ./smart_banking_project
+      dockerfile: api-gateway/Dockerfile
+    container_name: smart-banking-api-gateway
+    restart: unless-stopped
+    depends_on:
+      config-server:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      account-service:
+        condition: service_healthy
+      transaction-service:
+        condition: service_healthy
+      fraud-detection-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - smart-banking-net
+
+  # ------------------------------------------------------------
+  # frontend — React app served via Nginx (port 3000 -> container 80)
+  # Waits for api-gateway so the UI doesn't load before the API is ready.
+  # ------------------------------------------------------------
+  frontend:
+    build:
+      context: ./smart-banking-ui
+      dockerfile: Dockerfile
+    container_name: smart-banking-frontend
+    restart: unless-stopped
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    networks:
+      - smart-banking-net
+
+# ================================================================
+# Named volume for MySQL data persistence across container restarts
+# ================================================================
+volumes:
+  mysql-data:
+
+# ================================================================
+# Shared bridge network — lets containers resolve each other by
+# service name (e.g. "mysql", "kafka", "service-registry")
+# ================================================================
+networks:
+  smart-banking-net:
+    driver: bridge
