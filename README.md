@@ -310,7 +310,7 @@ smart-banking-platform/
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/smart-banking-platform.git
+git clone https://github.com/Avishkar-02/smart-banking-platform.git
 cd smart-banking-platform
 
 # Start everything — infrastructure + all services + frontend
