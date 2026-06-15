@@ -1,0 +1,9 @@
+# Place this file at: smart_banking_project/.dockerignore
+# Keeps the Docker build context small and fast.
+
+**/target/
+**/.idea/
+**/.git/
+**/*.iml
+**/.mvn/
+**/node_modules/
